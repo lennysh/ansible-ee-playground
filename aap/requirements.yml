@@ -1,0 +1,13 @@
+---
+# Collections needed to run aap/configure_aap.yml (NOT needed by AAP itself).
+# infra.aap_configuration depends on the certified ansible.controller /
+# ansible.platform collections, so install from Automation Hub:
+#
+#   ansible-galaxy collection install -r aap/requirements.yml
+collections:
+  - name: infra.aap_configuration
+    version: ">=4.0.0"
+  # Certified dependencies of infra.aap_configuration, match your AAP version:
+  - name: ansible.controller
+  - name: ansible.platform
+...

@@ -1,0 +1,289 @@
+---
+# =============================================================================
+# Build ONE Execution Environment from ONE definition file.
+#
+# Runs against the "ee_builders" inventory group (the EE Builder VM):
+#   - CLI on the builder VM : inventory.yml puts localhost in ee_builders
+#   - From AAP              : AAP inventory with the builder VM in ee_builders
+#                             (see aap/README.md)
+#
+#   ansible-playbook build_ee.yml --ask-vault-pass \
+#     -e ee_file=ee_definitions/ee-demo-minimal_v1.0.0.yml
+#
+# Image name and tag come from the FILENAME, the registry/namespace from the
+# file's "destination:" key:
+#
+#   ee_definitions/[any/sub/folders/]<ee-name>_v<version>.yml
+#     -> <destination>/<ee-name>:<version>   (+ :latest if ee_tag_latest)
+#
+# Optional extra vars:
+#   -e render_only=true      Only generate the ansible-builder files and print
+#                            them. No build, no push, no secrets required.
+#                            (Add keep_context=true to keep them on the VM.)
+#   -e push=false            Build on the builder VM but do not push.
+#   -e keep_context=true     Keep the build directory on the builder VM.
+#
+# Secrets come from EITHER config/vault.yml (CLI) OR the "EE Builder Secrets"
+# credential attached to the AAP job template:
+#   vault_registry_credentials  registry host -> {username, password}
+#   vault_hub_token             Private Automation Hub token (collections)
+# =============================================================================
+- name: Build Execution Environment from a single definition file
+  hosts: ee_builders
+  gather_facts: false
+  vars_files:
+    - config/settings.yml
+
+  vars:
+    render_only: false
+    keep_context: false
+    push: true
+    # <ee-name>_v<version>.yml  e.g. ee-casc-rhel9_v1.2.0.yml
+    __ee_filename_regex: '^([a-z0-9][a-z0-9-]*[a-z0-9])_v([0-9]+(\.[0-9]+){0,2}([-+][0-9A-Za-z.-]+)?)\.ya?ml$'
+    # <registry-host>[:port][/namespace...]  e.g. quay.io/myorg/aap-26
+    __destination_regex: '^(localhost|[a-z0-9-]+(\.[a-z0-9-]+)+)(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*$'
+    __pushing: "{{ push | bool and not render_only | bool }}"
+
+  pre_tasks:
+    # ---- Everything in this section is evaluated on the CONTROLLER side
+    # ---- (the AAP execution environment, or the VM itself on the CLI).
+    - name: Require ee_file
+      ansible.builtin.assert:
+        that: ee_file is defined and ee_file | length > 0
+        fail_msg: >-
+          Tell me which EE to build, e.g.
+          -e ee_file=ee_definitions/ee-demo-minimal_v1.0.0.yml
+        quiet: true
+
+    - name: Resolve definition file path
+      ansible.builtin.set_fact:
+        __ee_path: "{{ ee_file if ee_file is abs else playbook_dir ~ '/' ~ ee_file }}"
+        __ee_filename: "{{ ee_file | basename }}"
+
+    - name: Fail if definition file is missing
+      ansible.builtin.assert:
+        that: __ee_path is file
+        fail_msg: "EE definition file not found in the project: {{ ee_file }}"
+        quiet: true
+
+    - name: Enforce the <ee-name>_v<version>.yml naming convention
+      ansible.builtin.assert:
+        that: __ee_filename is regex(__ee_filename_regex)
+        fail_msg: >-
+          '{{ __ee_filename }}' does not follow the naming convention
+          <ee-name>_v<version>.yml (lowercase name, semantic version),
+          e.g. ee-casc-rhel9_v1.0.0.yml
+        quiet: true
+
+    - name: Derive image name and version from filename
+      ansible.builtin.set_fact:
+        __ee_name: "{{ __ee_filename | regex_replace(__ee_filename_regex, '\\1') }}"
+        __ee_version: "{{ __ee_filename | regex_replace(__ee_filename_regex, '\\2') }}"
+
+    - name: Load EE definition
+      ansible.builtin.include_vars:
+        file: "{{ __ee_path }}"
+        name: __ee_definition
+
+    - name: Make sure the file does not try to override name/tags
+      ansible.builtin.assert:
+        that:
+          - "'name' not in __ee_definition"
+          - "'tags' not in __ee_definition"
+          - "'tag' not in __ee_definition"
+        fail_msg: >-
+          Do not set name/tags inside {{ __ee_filename }}. The image name and
+          tag are taken from the filename so they can never drift apart.
+        quiet: true
+
+    - name: Work out destination and base image
+      ansible.builtin.set_fact:
+        __ee_destination: "{{ __ee_definition.destination | default(ee_default_destination | default('')) | regex_replace('/+$', '') }}"
+        __ee_base_image: >-
+          {{ __ee_definition.images.base_image.name
+             | default(__ee_definition.base_image | default(ee_base_image)) }}
+
+    - name: Require a destination when pushing
+      ansible.builtin.assert:
+        that: __ee_destination | length > 0
+        fail_msg: >-
+          {{ __ee_filename }} has no "destination:" (registry/namespace to push
+          to), e.g.  destination: quay.io/myorg/ansible-automation-platform-26
+          Add it to the file, set ee_default_destination in config/settings.yml,
+          or build without pushing (-e push=false).
+        quiet: true
+      when: __pushing | bool
+
+    - name: Validate destination format
+      ansible.builtin.assert:
+        that: __ee_destination is regex(__destination_regex)
+        fail_msg: >-
+          destination '{{ __ee_destination }}' in {{ __ee_filename }} is not valid.
+          Use <registry-host>[:port]/<namespace>, all lowercase, with no
+          https:// prefix and no image name or tag,
+          e.g. quay.io/myorg/ansible-automation-platform-26
+        quiet: true
+      when: __ee_destination | length > 0
+
+    - name: Work out registry hosts
+      ansible.builtin.set_fact:
+        __dest_host: "{{ __ee_destination.split('/') | first }}"
+        # A first path component without '.' or ':' (and not localhost) means Docker Hub
+        __base_host: >-
+          {{ (__ee_base_image.split('/') | first)
+             if ('/' in __ee_base_image and (__ee_base_image.split('/') | first) is regex('[.:]|^localhost$'))
+             else 'docker.io' }}
+
+    - name: Load secrets from config/vault.yml (CLI usage)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/config/vault.yml"
+      when: (playbook_dir ~ '/config/vault.yml') is file
+      no_log: true
+
+    - name: Normalise registry credentials (AAP injects them as a YAML string)
+      ansible.builtin.set_fact:
+        __registry_credentials: >-
+          {{ ((vault_registry_credentials | from_yaml) if vault_registry_credentials is string
+              else vault_registry_credentials) | default({}, true)
+             if vault_registry_credentials is defined else {} }}
+      no_log: true
+
+    - name: Validate registry credentials structure
+      ansible.builtin.assert:
+        that:
+          - __registry_credentials is mapping
+          - __registry_credentials | dict2items | rejectattr('value.username', 'defined') | list | length == 0
+          - __registry_credentials | dict2items | rejectattr('value.password', 'defined') | list | length == 0
+        fail_msg: >-
+          vault_registry_credentials must map registry host -> {username, password},
+          e.g.  quay.io: {username: myorg+robot, password: secret}
+        quiet: true
+      no_log: true
+
+    - name: Select push and pull credentials for this EE
+      ansible.builtin.set_fact:
+        __dest_cred: "{{ __registry_credentials[__dest_host] | default({}) if __dest_host | length > 0 else {} }}"
+        __base_cred: "{{ __registry_credentials[__base_host] | default({}) }}"
+      no_log: true
+
+    - name: Use placeholder hub token (render-only mode without secrets)
+      ansible.builtin.set_fact:
+        vault_hub_token: "<from-vault>"
+      when:
+        - render_only | bool
+        - vault_hub_token is not defined
+
+    - name: Fail if the hub token is missing
+      ansible.builtin.assert:
+        that: vault_hub_token is defined and vault_hub_token | length > 0
+        fail_msg: >-
+          Missing vault_hub_token (needed because ee_pull_collections_from_hub is true).
+          CLI: add it to config/vault.yml (see config/vault.yml.example).
+          AAP: attach an "EE Builder Secrets" credential to the job template.
+        quiet: true
+      when: ee_pull_collections_from_hub | bool
+
+    # ---- From here on, tasks run ON THE EE BUILDER VM.
+    - name: Gather builder VM user facts
+      ansible.builtin.setup:
+        gather_subset:
+          - "!all"
+          - "!min"
+          - user
+
+    - name: Set build directory on the builder VM
+      ansible.builtin.set_fact:
+        __ee_build_dir: >-
+          {{ ee_build_root | default(ansible_facts.user_dir ~ '/ee-builds') }}/{{ __ee_name }}_v{{ __ee_version }}
+
+    - name: Check builder tooling is installed
+      ansible.builtin.command: "{{ item }} --version"
+      loop:
+        - ansible-builder
+        - "{{ ee_container_runtime }}"
+      changed_when: false
+      when: not render_only | bool
+
+    - name: Show build plan
+      ansible.builtin.debug:
+        msg:
+          - "Definition : {{ ee_file }}"
+          - "EE name    : {{ __ee_name }}"
+          - "Version    : {{ __ee_version }}"
+          - "Base image : {{ __ee_base_image }}"
+          - "  pull auth: {{ __pull_auth }}"
+          - "Image tags : {{ __ee_tags | join(', ') }}"
+          - "Destination: {{ __dest_text }}"
+          - "  push auth: {{ __push_auth }}"
+          - "Builder VM : {{ inventory_hostname }}:{{ __ee_build_dir }}"
+          - "Mode       : {{ render_only | bool | ternary('render only (no build)', 'build') }}"
+      vars:
+        __ee_tags: "{{ [__ee_version] + (ee_tag_latest | bool | ternary(['latest'], [])) }}"
+        __dest_text: >-
+          {{ (__ee_destination | length > 0) | ternary(__ee_destination ~ '/' ~ __ee_name, '(none set)') }}
+          {{- '' if __pushing | bool else ' (not pushed)' }}
+        # Describe WHERE credentials come from - never print the values
+        __pull_auth: >-
+          {{ (__base_cred | length > 0)
+             | ternary('stored credentials for ' ~ __base_host,
+                       'none stored for ' ~ __base_host ~ ' (anonymous or existing podman login)') }}
+        __push_auth: >-
+          {{ '-' if not __pushing | bool else
+             ((__dest_cred | length > 0)
+              | ternary('stored credentials for ' ~ __dest_host,
+                        'none stored for ' ~ __dest_host ~ ' (existing podman login on the builder VM)')) }}
+
+  tasks:
+    - name: Build EE with infra.ee_utilities.ee_builder
+      ansible.builtin.include_role:
+        name: infra.ee_utilities.ee_builder
+      vars:
+        ee_builder_dir: "{{ __ee_build_dir }}"
+        ee_builder_dir_clean: "{{ not (render_only | bool or keep_context | bool) }}"
+        ee_build_files_only: "{{ render_only | bool }}"
+        ee_image_push: "{{ __pushing | bool }}"
+        ee_registry_dest: "{{ __ee_destination }}"
+        # Empty string = omitted by the role -> podman's existing login (if any)
+        ee_registry_username: "{{ __dest_cred.username | default('') }}"
+        ee_registry_password: "{{ __dest_cred.password | default('') }}"
+        ee_base_registry_username: "{{ __base_cred.username | default('') }}"
+        ee_base_registry_password: "{{ __base_cred.password | default('') }}"
+        ee_list:
+          - "{{ __ee_definition
+                | dict2items | rejectattr('key', 'equalto', 'destination') | items2dict
+                | combine({
+                    'name': __ee_name,
+                    'tags': [__ee_version] + (ee_tag_latest | bool | ternary(['latest'], []))
+                  }) }}"
+
+  post_tasks:
+    - name: Read rendered execution-environment.yaml
+      ansible.builtin.slurp:
+        src: "{{ __ee_build_dir }}/{{ __ee_name }}-execution-environment.yaml"
+      register: __rendered
+      when: render_only | bool
+
+    - name: Show rendered execution-environment.yaml
+      ansible.builtin.debug:
+        msg: "{{ (__rendered.content | b64decode).splitlines() }}"
+      when: render_only | bool
+
+    - name: Remove rendered files (they contain the hub token in ansible.cfg)
+      ansible.builtin.file:
+        path: "{{ __ee_build_dir }}"
+        state: absent
+      when:
+        - render_only | bool
+        - not keep_context | bool
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "{{ render_only | bool | ternary(__render_msg, __build_msg) }}"
+      vars:
+        __render_msg:
+          - "{{ keep_context | bool | ternary('Rendered build files kept on ' ~ inventory_hostname ~ ' in: ' ~ __ee_build_dir,
+                'Rendered files shown above (use -e keep_context=true to keep them on ' ~ inventory_hostname ~ ')') }}"
+        __build_msg:
+          - "Built image on {{ inventory_hostname }}: localhost/{{ __ee_name }}:{{ __ee_version }}"
+          - "{{ __pushing | bool | ternary('Pushed: ' ~ __ee_destination ~ '/' ~ __ee_name ~ ':' ~ __ee_version, 'Not pushed (push=false)') }}"
+...

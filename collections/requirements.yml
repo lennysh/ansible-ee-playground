@@ -1,0 +1,10 @@
+---
+# Collections needed on the EE Builder VM to RUN the build playbook.
+# (Collections that go INSIDE an EE are listed in each ee_definitions/ file.)
+#
+#   ansible-galaxy collection install -r collections/requirements.yml
+collections:
+  - name: infra.ee_utilities
+    version: ">=4.6.0"
+  - name: containers.podman
+...

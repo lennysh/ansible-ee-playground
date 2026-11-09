@@ -1,0 +1,47 @@
+---
+# =============================================================================
+# EE: ee-unifi-rhel9  (version comes from the filename)
+# Purpose : Dynamic UniFi inventory
+# Notes   : Swaps the image's Python to 3.13 (EPEL) and reinstalls Ansible on it.
+#           Was tagged 2.17 (the ansible-core version) in the original repo.
+# Origin  : lennysh-aap-execution-environments/vars/ansible-automation-platform/ee-unifi-rhel9/vars.yml
+# =============================================================================
+description: Dynamic UniFi inventory
+
+# Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
+destination: quay.io/lshirley/ansible-automation-platform
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.17
+
+dependencies:
+  galaxy:
+    collections:
+      - name: https://github.com/lennysh/ansible-unifi-inventory.git
+        type: git
+        version: convert-to-ansible-collection
+  # Build tools for Python packages with C extensions pulled in by collections
+  system:
+    - "python3.13-devel [platform:rpm]"
+    - "pkg-config [platform:rpm]"
+    - "systemd-devel [platform:rpm]"
+    - "gcc [platform:rpm]"
+
+build_steps:
+  prepend_base:
+    # Install EPEL repository
+    - RUN curl -o ./epel-release-latest.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+    - RUN rpm -i ./epel-release-latest.rpm
+    # Install Python 3.13 (required by aiounifi)
+    - RUN microdnf install -y python3.13 python3.13-pip
+    # Make Python 3.13 the default python3/pip3
+    - RUN alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1
+    - RUN alternatives --install /usr/bin/pip3 pip3 /usr/bin/pip3.13 1
+    - RUN alternatives --remove python3 /usr/bin/python3.11
+    - RUN alternatives --remove pip3 /usr/bin/pip3.11
+    # Replace the base image's Ansible with Ansible 10 (ansible-core 2.17) on Python 3.13
+    - RUN pip3.11 uninstall ansible ansible-runner -y
+    - RUN pip3 install ansible~=10.0.1 ansible-runner==2.3.6
+  append_final:
+    - RUN microdnf reinstall tzdata -y   # ee-minimal strips zoneinfo; needed for schedules
+    - RUN microdnf clean all
+...

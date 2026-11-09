@@ -1,0 +1,40 @@
+---
+# =============================================================================
+# EE: ee-casc-rhel9-git  (version comes from the filename)
+# Purpose : Config as Code for AAP 2.4 - collections pulled from public git repos
+# Origin  : lennysh-aap-execution-environments/vars/ansible-automation-platform-24/ee-casc-rhel9-git/vars.yml
+# =============================================================================
+description: Config as Code for AAP 2.4 (collections from git)
+
+# Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
+destination: quay.io/lshirley/ansible-automation-platform-24
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+dependencies:
+  galaxy:
+    collections:
+      - name: https://github.com/redhat-cop/infra.controller_configuration.git
+        type: git
+        version: devel
+      - name: ansible.controller
+        version: ">=4.5.0,<4.6.0"
+      - name: https://github.com/ansible/event-driven-ansible.git
+        type: git
+        version: main
+      - name: https://github.com/ansible-collections/ansible_hub.git
+        type: git
+        version: main
+  # Build tools for Python packages with C extensions pulled in by collections
+  system:
+    - "python3.11-devel [platform:rpm]"
+    - "pkg-config [platform:rpm]"
+    - "systemd-devel [platform:rpm]"
+    - "gcc [platform:rpm]"
+
+build_steps:
+  append_final:
+    - RUN microdnf reinstall tzdata -y   # ee-minimal strips zoneinfo; needed for schedules
+    - RUN microdnf clean all
+    # - RUN curl -L -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x /usr/local/bin/yq
+...

@@ -1,0 +1,23 @@
+---
+# =============================================================================
+# EE: ee-demo-minimal  (version comes from the filename)
+# Purpose : Small, fast-building EE used to demo the build workflow.
+# Owner   : Automation Platform Team
+# =============================================================================
+description: Demo EE - network/data filters with ansible.utils
+
+# Registry/namespace to push to (CHANGE ME). Image = <destination>/<ee-name>:<version>
+destination: pah.example.com/custom-ees
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+dependencies:
+  galaxy:
+    collections:
+      - name: ansible.utils
+  python:
+    - netaddr      # required by ansible.utils ipaddr filters
+    - jmespath     # required by the json_query filter
+  system:
+    - jq [platform:rpm]
+...

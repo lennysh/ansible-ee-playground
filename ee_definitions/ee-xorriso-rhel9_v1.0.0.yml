@@ -1,0 +1,38 @@
+---
+# =============================================================================
+# EE: ee-xorriso-rhel9  (version comes from the filename)
+# Purpose : Building ISO images (xorriso)
+# Notes   : Plain UBI 9 base (public, no login), so ansible-core/runner are
+#           installed by ansible-builder and the package manager is dnf.
+# Origin  : lennysh-aap-execution-environments/vars/ee-xorriso-rhel9/vars.yml
+# =============================================================================
+description: Building ISO images (xorriso)
+
+# Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
+destination: quay.io/lshirley
+
+base_image: registry.access.redhat.com/ubi9/ubi:latest
+
+# Not a microdnf-based image: setting options replaces the default
+options:
+  package_manager_path: /usr/bin/dnf
+
+dependencies:
+  ansible_core:
+    package_pip: ansible-core==2.15
+  ansible_runner:
+    package_pip: ansible-runner
+  python:
+    - requests
+
+build_steps:
+  prepend_base:
+    # Install xorriso + libraries (not in UBI repos) from AlmaLinux AppStream
+    - RUN curl -o ./libisofs.rpm https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/libisofs-1.5.4-4.el9.x86_64.rpm
+    - RUN curl -o ./libburn.rpm https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/libburn-1.5.4-5.el9.x86_64.rpm
+    - RUN curl -o ./libisoburn.rpm https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/libisoburn-1.5.4-5.el9_5.x86_64.rpm
+    - RUN curl -o ./xorriso.rpm https://repo.almalinux.org/almalinux/9/AppStream/x86_64/os/Packages/xorriso-1.5.4-5.el9_5.x86_64.rpm
+    - RUN rpm -i ./libisofs.rpm ./libburn.rpm ./libisoburn.rpm ./xorriso.rpm
+  append_final:
+    - RUN dnf clean all && rm -rf /var/cache/yum
+...

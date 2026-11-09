@@ -1,0 +1,96 @@
+---
+# =============================================================================
+# EE DEFINITION TEMPLATE
+#
+# 1. Copy this file into ee_definitions/ (sub-folders are fine, they are only
+#    for organising) and rename it:
+#        ee_definitions/[folder/]<ee-name>_v<version>.yml
+#    e.g. ee_definitions/ansible-automation-platform-26/ee-network-rhel9_v1.0.0.yml
+#
+#    <ee-name>  -> image name   (lowercase letters, digits, dashes)
+#    <version>  -> image tag    (semantic version: MAJOR.MINOR.PATCH)
+#
+# 2. Do NOT add "name:" or "tags:" here - they come from the filename.
+#    Set "destination:" - the registry + namespace this EE is pushed to.
+# 3. Delete the sections you don't need.
+#
+# Every key below is passed straight to the infra.ee_utilities.ee_builder role
+# (one item of its ee_list), which writes an ansible-builder v3 definition:
+#   https://github.com/redhat-cop/ee_utilities/blob/devel/roles/ee_builder/README.md
+#   https://ansible.readthedocs.io/projects/builder/en/stable/definition/
+# =============================================================================
+
+# Free-text description (also used if you generate AAP controller EE objects)
+description: What this EE is for
+
+# Registry host[:port] + namespace to push to - no https://, no image name/tag.
+# Image = <destination>/<ee-name>:<version>. Credentials are looked up by the
+# registry host in vault_registry_credentials (config/vault.yml or AAP).
+# Omit only if config/settings.yml sets ee_default_destination.
+destination: pah.example.com/custom-ees
+
+# Base image. Omit to use ee_base_image from config/settings.yml.
+# Pin a tag (not :latest) so the same file always builds the same thing.
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+dependencies:
+  # Collections - pulled from your Private Automation Hub (see config/settings.yml)
+  galaxy:
+    collections:
+      - name: ansible.posix
+      - name: community.general
+        version: ">=9.0.0,<10.0.0"   # pin ranges for reproducible builds
+      # A collection straight from a git repo (git must exist in the base image):
+      # - name: https://git.example.com/automation/my_collection.git
+      #   type: git
+      #   version: main
+
+  # Python packages (pip requirement syntax)
+  python:
+    - requests>=2.31
+
+  # System packages (bindep syntax). Untagged = runtime, shipped in the image.
+  # Tag build-only packages (gcc, *-devel) with "compile" to keep them OUT
+  # of the final image, e.g.  - gcc [platform:rpm compile]
+  system:
+    - git [platform:rpm]
+
+  # Uncomment ONLY if the base image lacks ansible-core/ansible-runner
+  # (e.g. a plain UBI image). The ee-minimal / ee-supported images have both.
+  # ansible_core:
+  #   package_pip: ansible-core==2.16.*
+  # ansible_runner:
+  #   package_pip: ansible-runner
+  # python_interpreter:
+  #   package_system: python3.11
+  #   python_path: /usr/bin/python3.11
+
+# Custom Containerfile commands, per build stage. Choosing the wrong stage is
+# the #1 cause of broken/bloated EEs - read docs/ansible-builder-stages.md.
+#   prepend_base / append_base       - inherited by ALL stages + shipped (CA certs, repos, proxy)
+#   prepend_galaxy / append_galaxy   - collection install; NOT shipped (build-time secrets)
+#   prepend_builder / append_builder - python wheel build; NOT shipped (build-only toolchains)
+#   prepend_final / append_final     - the image you ship (runtime tools, config, cleanup)
+build_steps:
+  append_final:
+    - RUN microdnf clean all
+
+# --- Example: add a corporate CA certificate to the image -------------------
+# 1. Put the cert in files/corp-ca.pem (repo root)
+# 2. Uncomment. List the bare filename: it is looked up in files/ automatically
+#    (a "files/..." path fails because the role won't create subdirectories).
+# build_items:                     # copied from files/ to the builder VM
+#   - corp-ca.pem
+# build_files:                     # added to the ansible-builder context (_build/)
+#   - src: corp-ca.pem
+#     dest: certs
+# build_steps:
+#   prepend_base:
+#     - COPY _build/certs/corp-ca.pem /etc/pki/ca-trust/source/anchors/corp-ca.pem
+#     - RUN update-ca-trust
+
+# ansible-builder options. NOTE: if you set this, it REPLACES the defaults,
+# so keep package_manager_path for Red Hat (microdnf-based) images.
+# options:
+#   package_manager_path: /usr/bin/microdnf
+...

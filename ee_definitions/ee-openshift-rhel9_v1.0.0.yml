@@ -1,0 +1,30 @@
+---
+# =============================================================================
+# EE: ee-openshift-rhel9  (version comes from the filename)
+# Purpose : Automate Kubernetes / OpenShift clusters.
+# Owner   : Automation Platform Team
+# =============================================================================
+description: Kubernetes and OpenShift automation
+
+# Registry/namespace to push to (CHANGE ME). Image = <destination>/<ee-name>:<version>
+destination: pah.example.com/custom-ees
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+dependencies:
+  galaxy:
+    collections:
+      - name: kubernetes.core
+      - name: redhat.openshift
+  python:
+    - kubernetes>=33.0.0
+    - requests>=2.25.0
+    - PyYAML>=5.4.0
+  system:
+    - python3.11-devel [platform:rpm]
+    - gcc [platform:rpm]
+
+build_steps:
+  append_final:
+    - RUN microdnf clean all
+...

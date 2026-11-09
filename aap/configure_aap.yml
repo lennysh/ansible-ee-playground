@@ -1,0 +1,45 @@
+---
+# =============================================================================
+# Create everything AAP needs to run build_ee.yml, as code:
+#   credential type + credentials, project, inventory, and the
+#   "Build Execution Environment" job template (with survey).
+#
+#   ansible-galaxy collection install -r aap/requirements.yml
+#   ansible-playbook aap/configure_aap.yml --ask-vault-pass
+#
+# Edit aap/vars/ee_builder_aap.yml first. Secrets come from config/vault.yml.
+# Safe to re-run: re-run it after adding EE files to refresh the survey list.
+# =============================================================================
+- name: Configure AAP to build Execution Environments from this repo
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - vars/ee_builder_aap.yml
+
+  pre_tasks:
+    - name: Load secrets
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../config/vault.yml"
+      no_log: true
+
+    - name: Find EE definition files (including sub-folders)
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../ee_definitions"
+        patterns: "*.yml,*.yaml"
+        recurse: true
+      register: __ee_files
+
+    - name: Build the survey drop-down list
+      ansible.builtin.set_fact:
+        ee_builder_definition_files: >-
+          {{ __ee_files.files | map(attribute='path')
+             | map('regex_replace', '^.*/ee_definitions/', 'ee_definitions/') | sort }}
+
+    - name: Show EE definitions that will be offered in the survey
+      ansible.builtin.debug:
+        var: ee_builder_definition_files
+
+  roles:
+    - infra.aap_configuration.dispatch
+...

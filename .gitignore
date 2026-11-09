@@ -1,0 +1,14 @@
+# Secrets - NEVER commit these
+config/vault.yml
+.vault_pass*
+ansible.cfg
+
+# Installed collections (re-created from collections/requirements.yml)
+collections/ansible_collections/
+
+# Misc
+*.log
+*.retry
+.ansible/
+.vscode/
+ignore_*

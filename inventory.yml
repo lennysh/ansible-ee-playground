@@ -1,0 +1,11 @@
+---
+# Inventory for running build_ee.yml directly ON the EE Builder VM (CLI).
+# When running from AAP, an AAP inventory replaces this file (see aap/README.md).
+all:
+  children:
+    ee_builders:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+...

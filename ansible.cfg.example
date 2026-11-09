@@ -1,0 +1,24 @@
+[defaults]
+inventory = inventory.yml
+collections_path = ./collections:~/.ansible/collections:/usr/share/ansible/collections
+stdout_callback = default
+result_format = yaml
+interpreter_python = auto_silent
+retry_files_enabled = False
+# Uncomment to avoid typing --ask-vault-pass on every run.
+# The file is git-ignored; create it with: echo 'MyVaultPassword' > .vault_pass && chmod 600 .vault_pass
+# vault_password_file = .vault_pass
+
+# By default the builder collections (infra.ee_utilities, containers.podman)
+# are installed from galaxy.ansible.com. To install them from your Private
+# Automation Hub instead, uncomment and edit the section below.
+# [galaxy]
+# server_list = pah_validated, pah_community
+#
+# [galaxy_server.pah_validated]
+# url = https://pah.example.com/pulp_ansible/galaxy/validated/
+# token = <hub-token>
+#
+# [galaxy_server.pah_community]
+# url = https://pah.example.com/pulp_ansible/galaxy/community/
+# token = <hub-token>

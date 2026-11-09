@@ -1,0 +1,42 @@
+---
+# =============================================================================
+# EE: ee-casc-rhel9  (version comes from the filename)
+# Purpose : Config as Code for AAP 2.7
+# Origin  : lennysh-aap-execution-environments/vars/ansible-automation-platform-27/ee-casc-rhel9/vars.yml
+# =============================================================================
+description: Config as Code for AAP 2.7
+
+# Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
+destination: quay.io/lshirley/ansible-automation-platform-27
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+dependencies:
+  python_interpreter:
+    python_path: /usr/bin/python3.12
+  galaxy:
+    collections:
+      - name: infra.aap_configuration
+        version: ">=4.10.0"
+      - name: infra.aap_configuration_extended
+        version: ">=4.12.0"
+      - name: ansible.controller
+        version: ">=4.8,<4.9"
+      - name: ansible.platform
+        version: ">=2.7,<2.8"
+      - name: ansible.eda
+        version: ">=2.12.1"
+      - name: ansible.hub
+        version: ">=1.0.6"
+  # Build tools for Python packages with C extensions pulled in by collections
+  system:
+    - "python3.12-devel [platform:rpm]"
+    - "pkg-config [platform:rpm]"
+    - "systemd-devel [platform:rpm]"
+    - "gcc [platform:rpm]"
+
+build_steps:
+  append_final:
+    - RUN microdnf clean all
+    # - RUN curl -L -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x /usr/local/bin/yq
+...

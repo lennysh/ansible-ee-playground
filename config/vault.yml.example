@@ -1,0 +1,44 @@
+---
+# =============================================================================
+# Copy this file to config/vault.yml, fill in values, then encrypt it:
+#
+#   cp config/vault.yml.example config/vault.yml
+#   vi config/vault.yml
+#   ansible-vault encrypt config/vault.yml
+#
+# config/vault.yml is git-ignored. Never commit it unencrypted.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Container registry credentials, keyed by registry HOST (include :port if any).
+# Used to PULL base images and to PUSH each EE to its "destination:".
+# Add one entry per registry your EEs pull from or push to. Quote values that
+# contain special characters (: # { } [ ] , & * ! | > ' " % @ `).
+# -----------------------------------------------------------------------------
+vault_registry_credentials:
+  # Base images (tip: use a registry service account:
+  # https://access.redhat.com/terms-based-registry/)
+  registry.redhat.io:
+    username: "12345678|ee-builder"
+    password: "changeme"
+  # Private Automation Hub container registry
+  pah.example.com:
+    username: "ee-builder"
+    password: "changeme"
+  # quay.io:
+  #   username: "myorg+ee_builder"   # robot account
+  #   password: "changeme"
+
+# Private Automation Hub API token, used to download collections during builds
+vault_hub_token: "changeme"
+
+# -----------------------------------------------------------------------------
+# Only needed for aap/configure_aap.yml (setting up AAP as code)
+# -----------------------------------------------------------------------------
+vault_aap_password: "changeme"
+# Private key AAP uses to SSH to the EE Builder VM (Machine credential)
+vault_ee_builder_ssh_private_key: |
+  -----BEGIN OPENSSH PRIVATE KEY-----
+  changeme
+  -----END OPENSSH PRIVATE KEY-----
+...

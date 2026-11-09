@@ -1,0 +1,170 @@
+---
+# =============================================================================
+# AAP objects needed to run build_ee.yml from Automation Controller.
+# Consumed by infra.aap_configuration.dispatch (aap/configure_aap.yml).
+# Edit the values marked CHANGE ME. Secrets come from config/vault.yml.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# AAP connection (AAP 2.5+: the platform gateway URL)
+# -----------------------------------------------------------------------------
+aap_hostname: aap.example.com                     # CHANGE ME
+aap_username: admin                               # CHANGE ME
+aap_password: "{{ vault_aap_password }}"
+aap_validate_certs: true
+
+# -----------------------------------------------------------------------------
+# Environment-specific values
+# -----------------------------------------------------------------------------
+ee_builder_aap_organization: Default              # CHANGE ME
+ee_builder_aap_scm_url: https://git.example.com/automation/ansible-ee-playground.git   # CHANGE ME
+ee_builder_aap_scm_branch: main
+ee_builder_vm_hostname: ee-builder.example.com    # CHANGE ME: the EE Builder VM
+ee_builder_vm_user: ee-builder                    # CHANGE ME: user that owns rootless podman
+# Execution environment that RUNS the build playbook (any EE with ansible-core works)
+ee_builder_aap_job_ee: Default execution environment
+
+# -----------------------------------------------------------------------------
+# Credential type: injects the build secrets as the same variables that
+# config/vault.yml provides on the CLI, so build_ee.yml works unchanged.
+#
+# Registry credentials are ONE YAML field (registry host -> username/password)
+# because each EE can push to a different registry, and AAP allows only one
+# credential of each type per job template.
+# -----------------------------------------------------------------------------
+controller_credential_types:
+  - name: EE Builder Secrets
+    description: Container registry credentials (per host) + Automation Hub token for build_ee.yml
+    kind: cloud
+    inputs:
+      fields:
+        - id: registry_credentials
+          type: string
+          label: Container registry credentials (YAML)
+          multiline: true
+          secret: true
+          help_text: >-
+            YAML mapping of registry host to username/password, used to pull
+            base images and push EEs to each EE's destination. Example:
+            registry.redhat.io: {username: "1234|svc", password: "..."}
+            quay.io: {username: "myorg+robot", password: "..."}
+        - id: hub_token
+          type: string
+          label: Private Automation Hub API token
+          help_text: Used during builds to download collections
+          secret: true
+    injectors:
+      # !unsafe stops Ansible templating these now; AAP templates them at job run
+      extra_vars:
+        vault_registry_credentials: !unsafe "{{ registry_credentials }}"
+        vault_hub_token: !unsafe "{{ hub_token }}"
+
+# -----------------------------------------------------------------------------
+# Credentials
+# -----------------------------------------------------------------------------
+controller_credentials:
+  - name: EE Builder Secrets
+    description: Secrets used by build_ee.yml
+    credential_type: EE Builder Secrets
+    organization: "{{ ee_builder_aap_organization }}"
+    inputs:
+      registry_credentials: "{{ vault_registry_credentials | to_nice_yaml }}"
+      hub_token: "{{ vault_hub_token }}"
+
+  - name: EE Builder VM SSH
+    description: SSH access to the EE Builder VM
+    credential_type: Machine
+    organization: "{{ ee_builder_aap_organization }}"
+    inputs:
+      username: "{{ ee_builder_vm_user }}"
+      ssh_key_data: "{{ vault_ee_builder_ssh_private_key }}"
+
+  # Uncomment if the git repository is private:
+  # - name: EE Playground Git
+  #   credential_type: Source Control
+  #   organization: "{{ ee_builder_aap_organization }}"
+  #   inputs:
+  #     username: git-bot
+  #     password: "{{ vault_git_token }}"
+
+# -----------------------------------------------------------------------------
+# Project: this repo. On sync, AAP installs collections/requirements.yml
+# (infra.ee_utilities, containers.podman) using the organization's
+# Galaxy / Automation Hub credentials.
+# -----------------------------------------------------------------------------
+controller_projects:
+  - name: Ansible EE Playground
+    description: One file per Execution Environment
+    organization: "{{ ee_builder_aap_organization }}"
+    scm_type: git
+    scm_url: "{{ ee_builder_aap_scm_url }}"
+    scm_branch: "{{ ee_builder_aap_scm_branch }}"
+    scm_update_on_launch: true    # always build from the latest commit
+    # credential: EE Playground Git
+    update_project: true
+    wait: true
+
+# -----------------------------------------------------------------------------
+# Inventory: the EE Builder VM in the "ee_builders" group build_ee.yml targets
+# -----------------------------------------------------------------------------
+controller_inventories:
+  - name: EE Builders
+    description: Hosts with podman + ansible-builder for building EEs
+    organization: "{{ ee_builder_aap_organization }}"
+
+controller_hosts:
+  - name: "{{ ee_builder_vm_hostname }}"
+    inventory: EE Builders
+
+controller_groups:
+  - name: ee_builders
+    inventory: EE Builders
+    hosts:
+      - "{{ ee_builder_vm_hostname }}"
+
+# -----------------------------------------------------------------------------
+# Job template with a survey. The EE drop-down is generated from the files in
+# ee_definitions/ (including sub-folders) - re-run configure_aap.yml after
+# adding a new EE file.
+# -----------------------------------------------------------------------------
+controller_templates:
+  - name: Build Execution Environment
+    description: Build (and push) one EE from a file in ee_definitions/
+    organization: "{{ ee_builder_aap_organization }}"
+    project: Ansible EE Playground
+    playbook: build_ee.yml
+    inventory: EE Builders
+    execution_environment: "{{ ee_builder_aap_job_ee }}"
+    credentials:
+      - EE Builder VM SSH
+      - EE Builder Secrets
+    allow_simultaneous: false     # one build at a time on the builder VM
+    survey_enabled: true
+    survey_spec:
+      name: Build Execution Environment
+      description: Choose the EE definition to build
+      spec:
+        - question_name: EE definition file
+          question_description: >-
+            File in ee_definitions/. The filename sets the image name and
+            version tag: <ee-name>_v<version>.yml
+          variable: ee_file
+          type: multiplechoice
+          required: true
+          choices: "{{ ee_builder_definition_files }}"
+        - question_name: Preview only?
+          question_description: >-
+            true = only render and print the ansible-builder files, no build.
+          variable: render_only
+          type: multiplechoice
+          required: true
+          choices: ["false", "true"]
+          default: "false"
+        - question_name: Push to registry?
+          question_description: false = build on the builder VM but do not push.
+          variable: push
+          type: multiplechoice
+          required: true
+          choices: ["true", "false"]
+          default: "true"
+...

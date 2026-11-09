@@ -1,0 +1,62 @@
+---
+# =============================================================================
+# Global build settings - apply to EVERY EE built from this repo.
+#
+# Anything EE-specific belongs in that EE's file under ee_definitions/.
+# Secrets belong in config/vault.yml (see config/vault.yml.example).
+# All variables are inputs to the infra.ee_utilities.ee_builder role:
+# https://github.com/redhat-cop/ee_utilities/blob/devel/roles/ee_builder/README.md
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Destination: set PER EE with the "destination:" key in each ee_definitions/ file
+#   (e.g. destination: quay.io/myorg/ansible-automation-platform-26)
+# Final image = <destination>/<ee-name>:<version>
+#
+# Optional fallback for EE files that don't set "destination:". Leave unset to
+# force every EE to declare its own.
+# -----------------------------------------------------------------------------
+# ee_default_destination: pah.example.com/custom-ees
+
+# Also push a moving "latest" tag alongside the version tag from the filename.
+ee_tag_latest: true
+
+# -----------------------------------------------------------------------------
+# Registry credentials are looked up PER REGISTRY HOST from
+# vault_registry_credentials (config/vault.yml on the CLI, or the
+# "EE Builder Secrets" credential in AAP):
+#   - push : credentials for the host in the EE's "destination:"
+#   - pull : credentials for the host in the EE's base image
+# A host with no entry falls back to any "podman login" session the build
+# user already has on the EE Builder VM.
+# -----------------------------------------------------------------------------
+
+# Default base image, used when an EE file does not set base_image.
+ee_base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
+
+# Always pull a fresh copy of the base image before building (picks up CVE fixes).
+ee_update_base_images: true
+
+# Red Hat EE base images use microdnf. ("downstream" = microdnf by default;
+# an EE can override it with its own options.package_manager_path.)
+ee_stream: downstream
+
+# -----------------------------------------------------------------------------
+# Source: collections. Collections are pulled from your Private Automation Hub
+# (published, rh-certified, validated and community repos, in that order).
+# The hub token is only used during the build and is NOT left in the image.
+# -----------------------------------------------------------------------------
+ee_pull_collections_from_hub: true
+ee_ah_host: pah.example.com                    # CHANGE ME: PAH (or AAP 2.5+ gateway) hostname
+ee_ah_token: "{{ vault_hub_token }}"
+ee_aap_version: 2.6                            # >= 2.5 uses the /pulp_ansible/galaxy/ API paths
+
+# -----------------------------------------------------------------------------
+# ansible-builder behaviour
+# -----------------------------------------------------------------------------
+ee_container_runtime: podman
+ee_squash: new          # squash new layers into one: smaller images
+ee_prune_images: true   # clean up dangling intermediate images after build
+ee_verbosity: 2         # 0-3; raise to 3 when troubleshooting a build
+ee_validate_certs: true # set false only if your registry/hub uses self-signed certs
+...

@@ -63,7 +63,7 @@ Then a more realistic one:
 
 ```bash
 tree ee_definitions/
-cat ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.0.yml
+cat ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.1.yml
 ```
 
 💬 *"Folders keep things organised. Here they mirror the destination

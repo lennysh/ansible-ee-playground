@@ -10,13 +10,13 @@ sets the image name and version**, and the file's **`destination:`** sets
 the registry and namespace:
 
 ```text
-ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.0.yml
+ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.1.yml
                └─ folder (organising only) ─┘ └ee-name──┘ └version┘
                                                     │         │
    destination: quay.io/myorg/ansible-automation-platform-26  │
                 │                                   │         │
                 ▼                                   ▼         ▼
-   quay.io/myorg/ansible-automation-platform-26/ee-casc-rhel9:1.0.0   (+ :latest)
+   quay.io/myorg/ansible-automation-platform-26/ee-casc-rhel9:1.0.1   (+ :latest)
 ```
 
 Each EE can push to a different registry or namespace. Credentials are
@@ -98,7 +98,7 @@ There are two ways to run a build, both using the same files:
 ├── ee_definitions/               # ONE FILE PER EE  <-- you work here
 │   ├── ee-demo-minimal_v1.0.0.yml
 │   ├── ansible-automation-platform-26/     # sub-folders are just for organising
-│   │   ├── ee-casc-rhel9_v1.0.0.yml
+│   │   ├── ee-casc-rhel9_v1.0.1.yml
 │   │   └── ...
 │   └── ...                       # see "Available EEs"
 ├── templates/
@@ -126,21 +126,20 @@ There are two ways to run a build, both using the same files:
 
 | EE | Purpose | Destination | Collections from | Base image | Definition |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| `ee-casc-rhel8-git` | Config as Code for AAP 2.4 (collections from git) | `quay.io/lshirley/ansible-automation-platform-24` | Hub + git | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-24/ee-casc-rhel8-git_v1.0.0.yml) |
-| `ee-casc-rhel8` | Config as Code for AAP 2.4 | `quay.io/lshirley/ansible-automation-platform-24` | Hub | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-24/ee-casc-rhel8_v1.0.0.yml) |
-| `ee-casc-rhel9-git` | Config as Code for AAP 2.4 (collections from git) | `quay.io/lshirley/ansible-automation-platform-24` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-24/ee-casc-rhel9-git_v1.0.0.yml) |
-| `ee-casc-rhel9` | Config as Code for AAP 2.4 | `quay.io/lshirley/ansible-automation-platform-24` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-24/ee-casc-rhel9_v1.0.0.yml) |
-| `ee-casc-rhel8-git` | Config as Code for AAP 2.5 (collections from git) | `quay.io/lshirley/ansible-automation-platform-25` | Hub + git | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-25/ee-casc-rhel8-git_v1.0.0.yml) |
-| `ee-casc-rhel8` | Config as Code for AAP 2.5 | `quay.io/lshirley/ansible-automation-platform-25` | Hub | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-25/ee-casc-rhel8_v1.0.0.yml) |
-| `ee-casc-rhel9-git` | Config as Code for AAP 2.5 (collections from git) | `quay.io/lshirley/ansible-automation-platform-25` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-25/ee-casc-rhel9-git_v1.0.0.yml) |
-| `ee-casc-rhel9` | Config as Code for AAP 2.5 | `quay.io/lshirley/ansible-automation-platform-25` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-25/ee-casc-rhel9_v1.0.0.yml) |
-| `ee-aap-self-service-portal-rhel9` | AAP Self-Service Portal (AAP 2.6) | `quay.io/lshirley/ansible-automation-platform-26` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-26/ee-aap-self-service-portal-rhel9_v1.0.0.yml) |
-| `ee-casc-rhel9-git` | Config as Code for AAP 2.6 (collections from git) | `quay.io/lshirley/ansible-automation-platform-26` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-26/ee-casc-rhel9-git_v1.0.0.yml) |
-| `ee-casc-rhel9` | Config as Code for AAP 2.6 | `quay.io/lshirley/ansible-automation-platform-26` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.0.yml) |
-| `ee-casc-rhel9-git` | Config as Code for AAP 2.7 (collections from git) | `quay.io/lshirley/ansible-automation-platform-27` | Hub + git | `ansible-automation-platform-27/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-27/ee-casc-rhel9-git_v1.0.0.yml) |
-| `ee-casc-rhel9` | Config as Code for AAP 2.7 | `quay.io/lshirley/ansible-automation-platform-27` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ansible-automation-platform-27/ee-casc-rhel9_v1.0.0.yml) |
-| `ee-proxmox-rhel9` | Dynamic Proxmox inventory | `quay.io/lshirley/ansible-automation-platform` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.17` | [v1.0.0](ee_definitions/ansible-automation-platform/ee-proxmox-rhel9_v1.0.0.yml) |
-| `ee-unifi-rhel9` | Dynamic UniFi inventory | `quay.io/lshirley/ansible-automation-platform` | git | `ansible-automation-platform/ee-minimal-rhel9:2.17` | [v1.0.0](ee_definitions/ansible-automation-platform/ee-unifi-rhel9_v1.0.0.yml) |
+| `ee-casc-rhel8-git` | Config as Code for AAP 2.4 (collections from git) | `quay.io/lshirley/ansible-automation-platform-24` | Hub + git | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-24/ee-casc-rhel8-git_v1.0.1.yml) |
+| `ee-casc-rhel8` | Config as Code for AAP 2.4 | `quay.io/lshirley/ansible-automation-platform-24` | Hub | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-24/ee-casc-rhel8_v1.0.1.yml) |
+| `ee-casc-rhel9-git` | Config as Code for AAP 2.4 (collections from git) | `quay.io/lshirley/ansible-automation-platform-24` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-24/ee-casc-rhel9-git_v1.0.1.yml) |
+| `ee-casc-rhel9` | Config as Code for AAP 2.4 | `quay.io/lshirley/ansible-automation-platform-24` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-24/ee-casc-rhel9_v1.0.1.yml) |
+| `ee-casc-rhel8-git` | Config as Code for AAP 2.5 (collections from git) | `quay.io/lshirley/ansible-automation-platform-25` | Hub + git | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-25/ee-casc-rhel8-git_v1.0.1.yml) |
+| `ee-casc-rhel8` | Config as Code for AAP 2.5 | `quay.io/lshirley/ansible-automation-platform-25` | Hub | `ansible-automation-platform/ee-minimal-rhel8:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-25/ee-casc-rhel8_v1.0.1.yml) |
+| `ee-casc-rhel9-git` | Config as Code for AAP 2.5 (collections from git) | `quay.io/lshirley/ansible-automation-platform-25` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-25/ee-casc-rhel9-git_v1.0.1.yml) |
+| `ee-casc-rhel9` | Config as Code for AAP 2.5 | `quay.io/lshirley/ansible-automation-platform-25` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-25/ee-casc-rhel9_v1.0.1.yml) |
+| `ee-casc-rhel9-git` | Config as Code for AAP 2.6 (collections from git) | `quay.io/lshirley/ansible-automation-platform-26` | Hub + git | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-26/ee-casc-rhel9-git_v1.0.1.yml) |
+| `ee-casc-rhel9` | Config as Code for AAP 2.6 | `quay.io/lshirley/ansible-automation-platform-26` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-26/ee-casc-rhel9_v1.0.1.yml) |
+| `ee-casc-rhel9-git` | Config as Code for AAP 2.7 (collections from git) | `quay.io/lshirley/ansible-automation-platform-27` | Hub + git | `ansible-automation-platform-27/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-27/ee-casc-rhel9-git_v1.0.1.yml) |
+| `ee-casc-rhel9` | Config as Code for AAP 2.7 | `quay.io/lshirley/ansible-automation-platform-27` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.1](ee_definitions/ansible-automation-platform-27/ee-casc-rhel9_v1.0.1.yml) |
+| `ee-proxmox-rhel9` | Dynamic Proxmox inventory | `quay.io/lshirley/ansible-automation-platform` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.17` | [v1.0.1](ee_definitions/ansible-automation-platform/ee-proxmox-rhel9_v1.0.1.yml) |
+| `ee-unifi-rhel9` | Dynamic UniFi inventory | `quay.io/lshirley/ansible-automation-platform` | git | `ansible-automation-platform/ee-minimal-rhel9:2.17` | [v1.0.1](ee_definitions/ansible-automation-platform/ee-unifi-rhel9_v1.0.1.yml) |
 | `ee-demo-minimal` | Demo EE - network/data filters with ansible.utils | `pah.example.com/custom-ees` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ee-demo-minimal_v1.0.0.yml) |
 | `ee-openshift-rhel9` | Kubernetes and OpenShift automation | `pah.example.com/custom-ees` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ee-openshift-rhel9_v1.0.0.yml) |
 | `ee-xorriso-rhel9` | Building ISO images (xorriso) | `quay.io/lshirley` | - | `ubi9/ubi:latest` | [v1.0.0](ee_definitions/ee-xorriso-rhel9_v1.0.0.yml) |

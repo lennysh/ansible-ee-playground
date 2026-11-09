@@ -380,8 +380,11 @@ default place for anything that should be in the image you ship:
   `kubectl`, `oc`).
 * **Configuration files** in `/etc`, and **runtime `ENV`** (`ANSIBLE_*`
   defaults, `TZ`).
-* **Restoring things the minimal base strips out**, e.g.
-  `microdnf reinstall tzdata -y` (ee-minimal ships without zoneinfo data).
+* **Restoring things the minimal base strips out.** Check first that it's
+  really missing: older ee-minimal images shipped without zoneinfo data,
+  and many EEs added `microdnf reinstall tzdata -y`. Current images include
+  it, and that command now **fails the build** with "The transaction was
+  empty". See the [casc example](#ee-casc--compile-tools-matching-python-headers-and-a-stale-tzdata-step).
 * **Cleanup**: `microdnf clean all`, removing caches. Clean up in the same
   stage that made the mess; cleaning in final can't shrink layers from
   other stages.
@@ -449,28 +452,43 @@ default place for anything that should be in the image you ship:
 
 ## Examples from this repo
 
-### `ee-casc-*`: tzdata and compile tools
+### `ee-casc-*`: compile tools, matching Python headers and a stale tzdata step
 
 ```yaml
 dependencies:
   system:
-    - python3.11-devel [platform:rpm]
-    - pkg-config [platform:rpm]
-    - systemd-devel [platform:rpm]
-    - gcc [platform:rpm]
+    - python3.12-devel [platform:rpm compile]   # v1.0.0 had python3.11-devel, untagged
+    - pkg-config [platform:rpm compile]
+    - systemd-devel [platform:rpm compile]
+    - gcc [platform:rpm compile]
 build_steps:
   append_final:
-    - RUN microdnf reinstall tzdata -y
+    # v1.0.0 had "- RUN microdnf reinstall tzdata -y" here (removed, see below)
     - RUN microdnf clean all
 ```
+* The four system packages are only needed to **compile** C extensions
+  that the collections need, such as `systemd-python` from `ansible.eda`.
+  In `v1.0.1` they're tagged `compile`. A test build of the same dependency
+  set (`ansible.eda` + these packages) on `ee-minimal-rhel9:2.16` gave:
 
-* `tzdata` is a **runtime** need (schedules, time zone conversion), so it's
-  restored in `append_final`.
-* The four system packages are only needed to **compile** Python
-  dependencies of the collections. Untagged, they ship in the final image
-  (see the [138 MB test](#the-compile-profile-keep-build-tools-out-of-your-image)).
-  Adding `compile` to each, e.g. `gcc [platform:rpm compile]`, should shrink
-  these EEs. Build and test before releasing the change as a new version.
+  | Variant | Result |
+  | :-- | :-- |
+  | `python3.11-devel`, untagged (as in `v1.0.0`) | ❌ build fails: `Python.h: No such file or directory` |
+  | `python3.12-devel`, untagged | ✅ 697 MB, ships gcc and systemd-devel |
+  | `python3.12-devel`, `[compile]` (`v1.0.1`) | ✅ **495 MB (−202 MB, −29%)**, no gcc. `import systemd.journal` still works. |
+
+* **The `-devel` package must match the base image's Python.** The `:2.16`
+  images are rebuilt over time and now ship **Python 3.12**, so the
+  `python3.11-devel` in `v1.0.0` stopped working. Check with
+  `podman run --rm --entrypoint python3 <base_image> --version` whenever
+  you change or refresh a base image.
+* **Steps that worked around an old base image can break on a newer one.**
+  `v1.0.0` restored timezone data with `microdnf reinstall tzdata -y` in
+  `append_final`, because older ee-minimal images shipped without zoneinfo.
+  The current `:2.16` and `:2.17` images ship full zoneinfo, and the
+  reinstall now exits with "The transaction was empty", failing the build at
+  its very last step. `v1.0.1` drops it. Timezones still work, because the
+  data is in the base image.
 
 ### `ee-unifi-rhel9`: Python swap in `prepend_base`
 

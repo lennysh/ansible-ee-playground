@@ -16,15 +16,18 @@ dependencies:
   galaxy:
     collections:
       - name: community.proxmox
-  # Build tools for Python packages with C extensions pulled in by collections
+  # Build-only: compile C extensions if any Python dependency needs it.
+  # Tagged "compile" so they stay OUT of the final image.
+  # python3.X-devel must match the Python the EE runs (3.11 in the :2.17 base image).
   system:
-    - "python3.11-devel [platform:rpm]"
-    - "pkg-config [platform:rpm]"
-    - "systemd-devel [platform:rpm]"
-    - "gcc [platform:rpm]"
+    - "python3.11-devel [platform:rpm compile]"
+    - "pkg-config [platform:rpm compile]"
+    - "systemd-devel [platform:rpm compile]"
+    - "gcc [platform:rpm compile]"
 
 build_steps:
   append_final:
-    - RUN microdnf reinstall tzdata -y   # ee-minimal strips zoneinfo; needed for schedules
+    # tzdata: current ee-minimal images already ship full zoneinfo, and
+    # "microdnf reinstall tzdata" now fails the build, so it was removed in v1.0.1.
     - RUN microdnf clean all
 ...

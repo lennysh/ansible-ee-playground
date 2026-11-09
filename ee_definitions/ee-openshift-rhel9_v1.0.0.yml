@@ -21,8 +21,9 @@ dependencies:
     - requests>=2.25.0
     - PyYAML>=5.4.0
   system:
-    - python3.11-devel [platform:rpm]
-    - gcc [platform:rpm]
+    # Build-only (kept out of the final image). Must match the base's Python (3.12).
+    - python3.12-devel [platform:rpm compile]
+    - gcc [platform:rpm compile]
 
 build_steps:
   append_final:

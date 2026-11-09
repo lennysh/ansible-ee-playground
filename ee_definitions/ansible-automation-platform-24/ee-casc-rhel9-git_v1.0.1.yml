@@ -1,15 +1,15 @@
 ---
 # =============================================================================
-# EE: ee-casc-rhel8-git  (version comes from the filename)
+# EE: ee-casc-rhel9-git  (version comes from the filename)
 # Purpose : Config as Code for AAP 2.4 - collections pulled from public git repos
-# Origin  : lennysh-aap-execution-environments/vars/ansible-automation-platform-24/ee-casc-rhel8-git/vars.yml
+# Origin  : lennysh-aap-execution-environments/vars/ansible-automation-platform-24/ee-casc-rhel9-git/vars.yml
 # =============================================================================
 description: Config as Code for AAP 2.4 (collections from git)
 
 # Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
 destination: quay.io/lshirley/ansible-automation-platform-24
 
-base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel8:2.16
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.16
 
 dependencies:
   galaxy:
@@ -25,16 +25,19 @@ dependencies:
       - name: https://github.com/ansible-collections/ansible_hub.git
         type: git
         version: main
-  # Build tools for Python packages with C extensions pulled in by collections
+  # Build-only: compile C extensions pulled in by collections (e.g. systemd-python
+  # from ansible.eda). Tagged "compile" so they stay OUT of the final image.
+  # python3.X-devel must match the base image's Python (3.12 in current :2.16 images).
   system:
-    - "python3.11-devel [platform:rpm]"
-    - "pkg-config [platform:rpm]"
-    - "systemd-devel [platform:rpm]"
-    - "gcc [platform:rpm]"
+    - "python3.12-devel [platform:rpm compile]"
+    - "pkg-config [platform:rpm compile]"
+    - "systemd-devel [platform:rpm compile]"
+    - "gcc [platform:rpm compile]"
 
 build_steps:
   append_final:
-    - RUN microdnf reinstall tzdata -y   # ee-minimal strips zoneinfo; needed for schedules
+    # tzdata: current ee-minimal images already ship full zoneinfo, and
+    # "microdnf reinstall tzdata" now fails the build, so it was removed in v1.0.1.
     - RUN microdnf clean all
     # - RUN curl -L -o /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && chmod +x /usr/local/bin/yq
 ...

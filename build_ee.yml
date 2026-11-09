@@ -234,27 +234,37 @@
                         'none stored for ' ~ __dest_host ~ ' (existing podman login on the builder VM)')) }}
 
   tasks:
-    - name: Build EE with infra.ee_utilities.ee_builder
-      ansible.builtin.include_role:
-        name: infra.ee_utilities.ee_builder
-      vars:
-        ee_builder_dir: "{{ __ee_build_dir }}"
-        ee_builder_dir_clean: "{{ not (render_only | bool or keep_context | bool) }}"
-        ee_build_files_only: "{{ render_only | bool }}"
-        ee_image_push: "{{ __pushing | bool }}"
-        ee_registry_dest: "{{ __ee_destination }}"
-        # Empty string = omitted by the role -> podman's existing login (if any)
-        ee_registry_username: "{{ __dest_cred.username | default('') }}"
-        ee_registry_password: "{{ __dest_cred.password | default('') }}"
-        ee_base_registry_username: "{{ __base_cred.username | default('') }}"
-        ee_base_registry_password: "{{ __base_cred.password | default('') }}"
-        ee_list:
-          - "{{ __ee_definition
-                | dict2items | rejectattr('key', 'equalto', 'destination') | items2dict
-                | combine({
-                    'name': __ee_name,
-                    'tags': [__ee_version] + (ee_tag_latest | bool | ternary(['latest'], []))
-                  }) }}"
+    - name: Build the EE, always cleaning up the build directory
+      block:
+        - name: Build EE with infra.ee_utilities.ee_builder
+          ansible.builtin.include_role:
+            name: infra.ee_utilities.ee_builder
+          vars:
+            ee_builder_dir: "{{ __ee_build_dir }}"
+            ee_builder_dir_clean: "{{ not (render_only | bool or keep_context | bool) }}"
+            ee_build_files_only: "{{ render_only | bool }}"
+            ee_image_push: "{{ __pushing | bool }}"
+            ee_registry_dest: "{{ __ee_destination }}"
+            # Empty string = omitted by the role -> podman's existing login (if any)
+            ee_registry_username: "{{ __dest_cred.username | default('') }}"
+            ee_registry_password: "{{ __dest_cred.password | default('') }}"
+            ee_base_registry_username: "{{ __base_cred.username | default('') }}"
+            ee_base_registry_password: "{{ __base_cred.password | default('') }}"
+            ee_list:
+              - "{{ __ee_definition
+                    | dict2items | rejectattr('key', 'equalto', 'destination') | items2dict
+                    | combine({
+                        'name': __ee_name,
+                        'tags': [__ee_version] + (ee_tag_latest | bool | ternary(['latest'], []))
+                      }) }}"
+      always:
+        - name: Remove build directory, even if the build failed (its ansible.cfg holds the hub token)
+          ansible.builtin.file:
+            path: "{{ __ee_build_dir }}"
+            state: absent
+          when:
+            - not render_only | bool
+            - not keep_context | bool
 
   post_tasks:
     - name: Read rendered execution-environment.yaml

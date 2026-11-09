@@ -1,0 +1,58 @@
+---
+# =============================================================================
+# EE: ee-winrm-kerberos-rhel8  (version comes from the filename)
+# Purpose : Windows automation over WinRM with Kerberos authentication.
+# Notes   : The recommended-way equivalent of the hand-written Containerfile in
+#           examples/legacy-podman-build/. Same content, built with
+#           ansible-builder via infra.ee_utilities. See
+#           docs/podman-build-vs-ee-definition.md for the comparison.
+# =============================================================================
+description: Windows automation over WinRM with Kerberos authentication
+
+# Registry/namespace to push to (CHANGE ME). Image = <destination>/<ee-name>:<version>
+destination: pah.example.com/custom-ees
+
+# Pinned tag, not :latest, so the same file always builds the same image.
+base_image: registry.redhat.io/ansible-automation-platform-24/ee-minimal-rhel8:1.0.0-965
+
+dependencies:
+  python:
+    - jmespath==1.0.0
+    - requests>=2.20
+    - pywinrm[kerberos]           # pulls in pykerberos (compiled from source)
+  system:
+    # Runtime: shipped in the final image
+    - krb5-libs [platform:rpm]
+    - krb5-workstation [platform:rpm]   # kinit / klist
+    - git [platform:rpm]                # the legacy build used git-subtree (RHEL repos only)
+    # Build-only: needed to compile pykerberos, kept OUT of the final image
+    - gcc [platform:rpm compile]
+    - krb5-devel [platform:rpm compile]
+    - python39-devel [platform:rpm compile]   # must match the base image's Python (3.9)
+
+# Corporate CA, pip mirror config and Kerberos config, from the repo's files/
+# directory. These are example placeholders: replace them with your own.
+build_items:
+  - example-corp-ca.crt
+  - example-pip.conf
+  - example-krb5.conf
+build_files:
+  - src: example-corp-ca.crt
+    dest: files
+  - src: example-pip.conf
+    dest: files
+  - src: example-krb5.conf
+    dest: files
+
+build_steps:
+  # Once, in base: every stage needs the CA (TLS to the pip mirror / repos)
+  # and pip.conf (wheels are downloaded in builder and installed in final).
+  prepend_base:
+    - COPY _build/files/example-corp-ca.crt /etc/pki/ca-trust/source/anchors/corp-ca.crt
+    - RUN update-ca-trust
+    - COPY _build/files/example-pip.conf /etc/pip.conf
+  # Runtime-only config goes in the final image.
+  append_final:
+    - COPY _build/files/example-krb5.conf /etc/krb5.conf
+    - RUN microdnf clean all
+...

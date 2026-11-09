@@ -1,0 +1,6 @@
+gcc [platform:rpm]
+krb5-devel [platform:rpm]
+krb5-libs [platform:rpm]
+krb5-workstation [platform:rpm]
+python3-devel [platform:rpm]
+git-subtree [platform:rpm]

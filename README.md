@@ -50,6 +50,7 @@ There are two ways to run a build, both using the same files:
 - [Destinations and registry credentials](#destinations-and-registry-credentials)
 - [Naming and versioning rules](#naming-and-versioning-rules)
 - [Where do custom build commands go? (ansible-builder stages)](docs/ansible-builder-stages.md)
+- [Why not just `podman build` a Containerfile? (measured comparison)](docs/podman-build-vs-ee-definition.md)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -107,7 +108,10 @@ There are two ways to run a build, both using the same files:
 │   └── vault.yml.example         # Secrets template -> copy to vault.yml + encrypt
 ├── files/                        # Extra files to bake into EEs (CA certs, etc.)
 ├── docs/
-│   └── ansible-builder-stages.md # How build stages work + which hook to use
+│   ├── ansible-builder-stages.md # How build stages work + which hook to use
+│   └── podman-build-vs-ee-definition.md  # Measured: hand-written Containerfile vs this approach
+├── examples/
+│   └── legacy-podman-build/      # A hand-maintained Containerfile + compare.sh
 ├── aap/                          # Running from AAP
 │   ├── README.md                 #   setup guide (as code or via the UI)
 │   ├── configure_aap.yml         #   creates credential type, creds, project, inventory, job template
@@ -140,6 +144,7 @@ There are two ways to run a build, both using the same files:
 | `ee-demo-minimal` | Demo EE - network/data filters with ansible.utils | `pah.example.com/custom-ees` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ee-demo-minimal_v1.0.0.yml) |
 | `ee-openshift-rhel9` | Kubernetes and OpenShift automation | `pah.example.com/custom-ees` | Hub | `ansible-automation-platform/ee-minimal-rhel9:2.16` | [v1.0.0](ee_definitions/ee-openshift-rhel9_v1.0.0.yml) |
 | `ee-xorriso-rhel9` | Building ISO images (xorriso) | `quay.io/lshirley` | - | `ubi9/ubi:latest` | [v1.0.0](ee_definitions/ee-xorriso-rhel9_v1.0.0.yml) |
+| `ee-winrm-kerberos-rhel8` | Windows automation over WinRM with Kerberos authentication | `pah.example.com/custom-ees` | - | `ansible-automation-platform-24/ee-minimal-rhel8:1.0.0-965` | [v1.0.0](ee_definitions/examples/ee-winrm-kerberos-rhel8_v1.0.0.yml) |
 
 *Hub* = your Private Automation Hub. *git* = public git repos: the EE Builder VM
 (during the build) needs outbound HTTPS to github.com for these EEs.
@@ -419,5 +424,6 @@ The playbook enforces these rules and stops with a clear message if a file break
 
 * [infra.ee_utilities: ee_builder role](https://github.com/redhat-cop/ee_utilities/blob/devel/roles/ee_builder/README.md)
 * [How ansible-builder stages work, and which hook to use](docs/ansible-builder-stages.md)
+* [Hand-written Containerfile + podman build vs EE definitions: measured comparison](docs/podman-build-vs-ee-definition.md)
 * [ansible-builder v3 definition format](https://ansible.readthedocs.io/projects/builder/en/stable/definition/)
 * [Red Hat docs: Creating and using execution environments](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/)

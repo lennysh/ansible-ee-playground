@@ -1,0 +1,60 @@
+---
+# =============================================================================
+# EE: ee-builder-rhel9  (version comes from the filename)
+# Purpose : An EE that BUILDS EEs. Use it as the execution environment of the
+#           "Build Execution Environment" job template to build EEs INSIDE the
+#           job container (inventory: localhost, ansible_connection=local),
+#           instead of SSHing to a dedicated EE Builder VM.
+#
+# Base    : Red Hat's ansible-dev-tools image (AAP 2.7). It ships ansible-core,
+#           ansible-runner, ansible-builder, ansible-navigator and podman,
+#           already configured for rootless podman-in-podman:
+#             /etc/containers/containers.conf  shares the job's namespaces, no cgroups
+#             /etc/subuid, /etc/subgid         id ranges for the uid 1000 "podman" user
+#             VOLUMEs for container storage    (works without /dev/fuse in the job)
+#           The 2.7 image is NOT itself an EE (no entrypoint, no EE label);
+#           ansible-builder's final stage adds the entrypoint, dumb-init,
+#           /runner and the label, so the image built from this file is one.
+#           Otherwise this file only adds what build_ee.yml needs on top.
+#           A from-scratch equivalent (ee-minimal + all that setup by hand) is
+#           in ee_definitions/examples/ee-builder-ubi-rhel9_v1.0.0.yml.
+#
+# Runs anywhere a container runs as uid 1000 with a range of sub-uids:
+# plain rootless "podman run", AAP VM-based execution nodes (no Container Run
+# Options changes, SELinux stays enforcing), or OpenShift pods in a user
+# namespace. NOT in random-uid OpenShift pods. See docs/ee-builder-ee.md.
+# =============================================================================
+description: Builds Execution Environments (ansible-builder + podman)
+
+# Registry/namespace to push to. Image = <destination>/<ee-name>:<version>
+destination: quay.io/lshirley/ansible-automation-platform-27
+
+# 26.11.0 is a stream tag: it moves with Red Hat's CVE rebuilds of 26.11.0.
+# For a fully frozen build, pin a release tag instead (e.g. 26.11.0-1794524229).
+# (The -27 repo has no 26.1.0 tag; its tags start at 26.4.6.)
+base_image: registry.redhat.io/ansible-automation-platform-27/ansible-dev-tools-rhel9:26.11.0
+
+dependencies:
+  galaxy:
+    collections:
+      # What build_ee.yml uses (keep in sync with collections/requirements.yml)
+      - name: infra.ee_utilities
+        version: ">=4.6.0"
+      - name: containers.podman
+
+  # ansible-builder, podman, fuse-overlayfs and git are already in the base.
+  # skopeo is handy for inspecting/copying images between registries.
+  system:
+    - skopeo [platform:rpm]
+
+build_steps:
+  append_final:
+    # RUN steps of inner builds: chroot isolation needs no bind mounts or
+    # extra privileges. Without it, buildah's default isolation fails under
+    # SELinux ("pkg/bind: error detaching ... permission denied") unless the
+    # job container runs with --security-opt label=disable. With it, NO extra
+    # container run options are needed (AAP nodes or plain podman run).
+    - ENV BUILDAH_ISOLATION=chroot
+
+    - RUN microdnf clean all && rm -rf /var/cache/yum /var/cache/dnf
+...

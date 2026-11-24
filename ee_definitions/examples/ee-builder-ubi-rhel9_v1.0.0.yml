@@ -1,0 +1,128 @@
+---
+# =============================================================================
+# EE: ee-builder-ubi-rhel9  (version comes from the filename)
+# Purpose : An EE that BUILDS EEs, assembled from scratch on ee-minimal.
+# Notes   : Reference/comparison only. The recommended builder EE is
+#           ee_definitions/ansible-automation-platform-27/ee-builder-rhel9_v*.yml,
+#           which starts from Red Hat's ansible-dev-tools image where all of
+#           the podman-in-podman setup below is already done and maintained.
+#           This file shows what that setup actually involves. Tested: it
+#           builds, and builds EEs nested inside an AAP-style job container.
+#
+# How nested builds work ("podman in podman"):
+#   * Inner podman runs ROOTLESS as the EE user (uid 1000), with storage in
+#     ~/.local/share/containers using fuse-overlayfs (native overlay can't be
+#     stacked on the job container's own overlay root filesystem).
+#   * /etc/subuid + /etc/subgid give uid 1000 a range of 65535 ids for the
+#     images it pulls/builds. (With any other uid there is no range: images
+#     still unpack thanks to ignore_chown_errors, but RUN steps fail with
+#     "error setting supplemental groups list" - see docs/ee-builder-ee.md.)
+#   * containers.conf shares the job container's namespaces and disables
+#     cgroups for inner containers, and BUILDAH_ISOLATION=chroot means
+#     "RUN" steps need no extra privileges.
+#
+# Like ee-builder-rhel9, the OUTER container needs no extra options (tested
+# with rootless podman, SELinux enforcing) - see docs/ee-builder-ee.md.
+# =============================================================================
+description: Builds Execution Environments - from-scratch reference version
+
+# Registry/namespace to push to (CHANGE ME). Image = <destination>/<ee-name>:<version>
+destination: pah.example.com/custom-ees
+
+base_image: registry.redhat.io/ansible-automation-platform/ee-minimal-rhel9:2.17
+
+dependencies:
+  galaxy:
+    collections:
+      # What build_ee.yml uses (keep in sync with collections/requirements.yml)
+      - name: infra.ee_utilities
+        version: ">=4.6.0"
+      - name: containers.podman
+
+  python:
+    - ansible-builder>=3.1,<4
+
+  # Runtime tools - shipped in the image (all from the UBI 9 repos).
+  system:
+    - podman [platform:rpm]           # the container runtime ansible-builder drives
+    - buildah [platform:rpm]          # podman build backend, handy for debugging
+    - skopeo [platform:rpm]           # inspect/copy images between registries
+    - fuse-overlayfs [platform:rpm]   # rootless overlay storage inside a container
+    - crun [platform:rpm]             # OCI runtime for inner containers
+    - passt [platform:rpm]            # rootless networking (pasta)
+    - slirp4netns [platform:rpm]      # rootless networking (older fallback)
+    - shadow-utils [platform:rpm]     # newuidmap/newgidmap for rootless user namespaces
+    - containers-common [platform:rpm]
+    - git [platform:rpm]              # git-sourced collections in EE definitions
+
+build_steps:
+  append_base:
+    # podman -> netavark -> aardvark-dns, but aardvark-dns is NOT in the UBI 9
+    # repos (only in entitled RHEL repos), so the system package install fails.
+    # aardvark-dns only provides DNS on custom podman networks; nested builds
+    # use the job container's network (netns=host below), so it isn't needed.
+    # Install netavark without it. append_base is inherited by every stage,
+    # which matters: the builder stage installs the "system:" packages too.
+    - RUN cd /tmp && microdnf download netavark
+        && rpm -i --nodeps /tmp/netavark-*.rpm
+        && rm -f /tmp/netavark-*.rpm
+
+  append_final:
+    # The final stage runs as root until ansible-builder adds "USER 1000" at
+    # the very end, so system config can be written here.
+
+    # --- Rootless podman: subordinate ids for the EE user (uid 1000) ---------
+    # Keyed "1000": the runtime (or the EE entrypoint) creates the passwd
+    # entry with the uid as the user NAME. Ranges mirror quay.io/podman/stable.
+    # Do NOT chmod u+s newuidmap/newgidmap: they keep their file capabilities
+    # (cap_setuid/cap_setgid) and setuid makes them fail with
+    # "open of uid_map failed: Permission denied".
+    - RUN printf '1000:1:999\n1000:1001:64535\n' > /etc/subuid
+        && cp /etc/subuid /etc/subgid
+
+    # --- Inner container config ---------------------------------------------
+    # Reuse the job container's namespaces and skip cgroups: the job
+    # container can't create its own, and doesn't need to for builds.
+    - >-
+      RUN printf '%s\n'
+      '[containers]'
+      'netns="host"'
+      'userns="host"'
+      'ipcns="host"'
+      'utsns="host"'
+      'cgroupns="host"'
+      'cgroups="disabled"'
+      'log_driver="k8s-file"'
+      '[engine]'
+      'cgroup_manager="cgroupfs"'
+      'events_logger="file"'
+      'runtime="crun"'
+      > /etc/containers/containers.conf
+
+    # Storage: overlay through fuse-overlayfs. ignore_chown_errors lets image
+    # layers unpack even when no subuid range is available (single-uid mode).
+    - >-
+      RUN printf '%s\n'
+      '[storage]'
+      'driver = "overlay"'
+      'runroot = "/run/containers/storage"'
+      'graphroot = "/var/lib/containers/storage"'
+      '[storage.options.overlay]'
+      'mount_program = "/usr/bin/fuse-overlayfs"'
+      'mountopt = "nodev,fsync=0"'
+      'ignore_chown_errors = "true"'
+      > /etc/containers/storage.conf
+
+    # Rootless storage location must exist and be writable by uid 1000 or
+    # by an arbitrary uid in group 0 (OpenShift).
+    - RUN mkdir -p /home/runner/.local/share/containers /home/runner/.config/containers
+        && chown -R 1000:0 /home/runner/.local /home/runner/.config
+        && chmod -R g=u /home/runner/.local /home/runner/.config
+
+    # "RUN" steps of inner builds: chroot isolation needs no extra privileges.
+    # _CONTAINERS_USERNS_CONFIGURED stays unset so podman sets up its own
+    # rootless user namespace.
+    - ENV BUILDAH_ISOLATION=chroot
+
+    - RUN microdnf clean all && rm -rf /var/cache/yum /var/cache/dnf
+...
